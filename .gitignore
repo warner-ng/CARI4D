@@ -1,0 +1,106 @@
+# =========================
+# Python cache / build
+# =========================
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.pyd
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# =========================
+# Virtual env / tooling
+# =========================
+.venv/
+venv/
+env/
+ENV/
+.python-version
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+.ipynb_checkpoints/
+
+# =========================
+# IDE / OS junk
+# =========================
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# =========================
+# Secrets / local config
+# =========================
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+
+# =========================
+# Project runtime outputs
+# =========================
+/output/
+/weights/
+/data/
+/sam-3d-body/checkpoints/
+
+# SMPL/AGORA downloads (通常体积大且受许可限制)
+#/data/smpl/      # 如果本地仅用于运行可取消注释
+# 或者只忽略模型二进制:
+data/smpl/**/*.pkl
+data/smpl/**/*.npz
+
+# =========================
+# External cloned deps (README 里让用户自行 clone)
+# =========================
+/unidepth/
+/VolumetricSMPL/
+/sam3/
+/sapiens/
+
+# 临时脚本
+.tmp_*
+
+# =========================
+# Logs / checkpoints / artifacts
+# =========================
+*.log
+logs/
+wandb/
+tensorboard/
+runs/
+checkpoints/
+*.ckpt
+*.pth
+*.pt
+*.onnx
+*.engine
+*.trt
+
+# =========================
+# Media / archives generated during experiments
+# =========================
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.webm
+*.gif
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.7z

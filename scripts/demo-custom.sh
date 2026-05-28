@@ -30,7 +30,7 @@ python prep/run_nlf_sepK.py -o ${nlf_path} --masks_root ${masks_root} --video ${
 
 # Step 3: run SMPLH fitting to get globally consistent human pose and translation
 python prep/fit_smplh_global.py --wild_video --video ${video} --packed_root ${packed_root} --masks_root ${masks_root} \
-    --nlf_path=${nlf_path}
+    --nlf_path=${nlf_path} -o ${nlf_path}-opt
 
 # Step 4: align Unidepth to GENMO human
 python prep/align_monod2hum.py --wild_video --nlf_path ${nlf_path}-opt \

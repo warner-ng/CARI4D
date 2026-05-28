@@ -30,11 +30,16 @@ outpath=output/coconet # Here cam_id indicates it will process <video_prefix>.<c
 # Step 6: run optimization
 video_prefix=$(basename "$video" | cut -d. -f1)
 echo $video_prefix
-python learning/training/opt_refineout.py num_steps=3000 w_acc_v=600 w_contact=300  save_name=optv2 batch_size=192 opt_rot=True \
-opt_trans=True w_temp=1000 w_sil=0.002 w_contact=200.0 w_pen=2.0 w_j2d=0.03 opt_smpl_trans=False opt_betas=False  \
+# For 16GB GPUs, use a lower batch size by default to avoid CUDA OOM at penetration loss stage.
+# Override when needed, e.g. OPT_REFINE_BS=96 OPT_REFINE_PEN=2.0 bash scripts/demo.sh
+OPT_REFINE_BS=${OPT_REFINE_BS:-32}
+OPT_REFINE_PEN=${OPT_REFINE_PEN:-2.0}
+export PYTORCH_CUDA_ALLOC_CONF=${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}
+python learning/training/opt_refineout.py num_steps=3000 w_acc_v=600 w_contact=300  save_name=optv2 batch_size=${OPT_REFINE_BS} opt_rot=True \
+opt_trans=True w_temp=1000 w_sil=0.002 w_contact=200.0 w_pen=${OPT_REFINE_PEN} w_j2d=0.03 opt_smpl_trans=False opt_betas=False  \
 pth_file=output/coconet/cari4d-release+step031397_demo/${video_prefix}.pth  \
 video_root=data/cari4d-demo/behave/videos/ \
 packed_root=data/cari4d-demo/behave/packed \
 masks_root=data/cari4d-demo/behave/masks/  \
 hy3d_meshes_root=data/cari4d-demo/meshes outpath=output/opt
-# Note: use batch size=64 if OOM for GPU with memory <=24GB, e.g. 4090.
+# Note: if OOM persists, reduce OPT_REFINE_BS further (e.g. 16).

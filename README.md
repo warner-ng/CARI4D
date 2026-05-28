@@ -5,9 +5,7 @@ This is the official implementation of our CVPR paper CARI4D.
 
 Authors: Xianghui Xie, Bowen Wen, Yan Chang, Hesam Rabeti, Jiefeng Li, Ye Yuan, Gerard Pons-Moll, Stan Birchfield
 
-<p align="left">
-<img src="https://github.com/NVlabs/CARI4D/blob/website/static/videos/teaser-cut.gif" alt="teaser" width="80%"/>
-</p>
+
 
 ## Contents
 - [Installation](#installation)
@@ -32,6 +30,13 @@ Authors: Xianghui Xie, Bowen Wen, Yan Chang, Hesam Rabeti, Jiefeng Li, Ye Yuan, 
 
 **Environment setup option 1**: Docker.  
 ```bash
+sudo systemctl enable --now docker
+sudo usermod -aG docker $USER
+newgrp docker
+id -nG
+ls -l /var/run/docker.sock # should be able to see docker in the list
+
+
 docker pull xiexh20/cari4d && docker tag xiexh20/cari4d cari4d  # Or to build from scratch: cd docker/ && docker build --network host -t cari4d . && cd .. 
 bash docker/run_container.sh
 ```
