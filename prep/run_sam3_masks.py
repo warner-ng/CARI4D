@@ -15,6 +15,7 @@ import os
 import sys
 import tempfile
 import shutil
+import traceback
 
 import cv2
 import h5py
@@ -211,69 +212,85 @@ def save_visualization(frames, human_masks, object_masks, output_path, fps=30):
 
 
 def main():
-    args = parse_args()
+    predictor = None
+    try:
+        args = parse_args()
 
-    # Set HF token
-    hf_token = args.hf_token or os.environ.get("HF_TOKEN")
-    os.environ["HF_TOKEN"] = hf_token
-    assert hf_token is not None, "HF_TOKEN is not set"
+        # Set HF token
+        hf_token = args.hf_token or os.environ.get("HF_TOKEN")
+        if not hf_token:
+            raise RuntimeError("HF_TOKEN is not set (pass --hf_token or export HF_TOKEN)")
+        os.environ["HF_TOKEN"] = hf_token
 
-    # Derive paths
-    seq_name = extract_seq_name(args.video)
-    if args.output_dir is None:
-        video_dir = os.path.dirname(args.video)
-        args.output_dir = os.path.join(os.path.dirname(video_dir), "masks")
+        # Derive paths
+        seq_name = extract_seq_name(args.video)
+        if args.output_dir is None:
+            video_dir = os.path.dirname(args.video)
+            args.output_dir = os.path.join(os.path.dirname(video_dir), "masks")
 
-    h5_path = os.path.join(args.output_dir, f"{seq_name}_masks_k{args.kid}.h5")
+        h5_path = os.path.join(args.output_dir, f"{seq_name}_masks_k{args.kid}.h5")
 
-    print(f"Video: {args.video}")
-    print(f"Sequence: {seq_name}")
-    print(f"Human prompt: {args.human_prompt}")
-    print(f"Object prompt: {args.object_prompt}")
-    print(f"Output: {h5_path}")
-    print(f"Chunk size: {args.chunk_size} frames")
+        print(f"Video: {args.video}")
+        print(f"Sequence: {seq_name}")
+        print(f"Human prompt: {args.human_prompt}")
+        print(f"Object prompt: {args.object_prompt}")
+        print(f"Output: {h5_path}")
+        print(f"Chunk size: {args.chunk_size} frames")
 
-    # Load video frames
-    print("Loading video frames...")
-    frames = load_video_frames(args.video)
-    num_frames = len(frames)
-    H, W = frames[0].shape[:2]
-    print(f"Loaded {num_frames} frames ({W}x{H})")
+        # Load video frames
+        print("Loading video frames...")
+        frames = load_video_frames(args.video)
+        num_frames = len(frames)
+        if num_frames == 0:
+            raise RuntimeError(f"No frames loaded from video: {args.video}")
+        H, W = frames[0].shape[:2]
+        print(f"Loaded {num_frames} frames ({W}x{H})")
 
-    # Get fps
-    cap = cv2.VideoCapture(args.video)
-    fps = cap.get(cv2.CAP_PROP_FPS) or 30
-    cap.release()
+        # Get fps
+        cap = cv2.VideoCapture(args.video)
+        fps = cap.get(cv2.CAP_PROP_FPS) or 30
+        cap.release()
 
-    # Build SAM3 predictor
-    print("Building SAM3 video predictor...")
-    gpus_to_use = list(range(torch.cuda.device_count()))
-    predictor = build_sam3_video_predictor(gpus_to_use=gpus_to_use)
+        # Build SAM3 predictor
+        print("Building SAM3 video predictor...")
+        gpus_to_use = list(range(torch.cuda.device_count()))
+        predictor = build_sam3_video_predictor(gpus_to_use=gpus_to_use)
 
-    # Segment human (chunked)
-    print(f"Segmenting human: '{args.human_prompt}'...")
-    human_masks = segment_prompt_chunked(predictor, frames, args.human_prompt, args.chunk_size, fps)
-    human_count = sum(1 for m in human_masks.values() if m is not None and m.any())
-    print(f"  Human masks found in {human_count}/{num_frames} frames")
+        # Segment human (chunked)
+        print(f"Segmenting human: '{args.human_prompt}'...")
+        human_masks = segment_prompt_chunked(predictor, frames, args.human_prompt, args.chunk_size, fps)
+        human_count = sum(1 for m in human_masks.values() if m is not None and m.any())
+        print(f"  Human masks found in {human_count}/{num_frames} frames")
 
-    # Segment object (chunked)
-    print(f"Segmenting object: '{args.object_prompt}'...")
-    object_masks = segment_prompt_chunked(predictor, frames, args.object_prompt, args.chunk_size, fps)
-    obj_count = sum(1 for m in object_masks.values() if m is not None and m.any())
-    print(f"  Object masks found in {obj_count}/{num_frames} frames")
+        # Segment object (chunked)
+        print(f"Segmenting object: '{args.object_prompt}'...")
+        object_masks = segment_prompt_chunked(predictor, frames, args.object_prompt, args.chunk_size, fps)
+        obj_count = sum(1 for m in object_masks.values() if m is not None and m.any())
+        print(f"  Object masks found in {obj_count}/{num_frames} frames")
 
-    # Shutdown predictor
-    predictor.shutdown()
+        # Save H5
+        save_masks_h5(human_masks, object_masks, h5_path, seq_name, args.kid, frames[0].shape)
 
-    # Save H5
-    save_masks_h5(human_masks, object_masks, h5_path, seq_name, args.kid, frames[0].shape)
+        # Visualization
+        if args.visualize:
+            vis_path = os.path.join(args.output_dir, f"{seq_name}_sam3_vis.mp4")
+            save_visualization(frames, human_masks, object_masks, vis_path, fps=fps)
 
-    # Visualization
-    if args.visualize:
-        vis_path = os.path.join(args.output_dir, f"{seq_name}_sam3_vis.mp4")
-        save_visualization(frames, human_masks, object_masks, vis_path, fps=fps)
-
-    print("Done!")
+        print("Done!")
+    except Exception as exc:
+        print("\n[ERROR] run_sam3_masks.py failed", file=sys.stderr)
+        print(f"[ERROR] {type(exc).__name__}: {exc}", file=sys.stderr)
+        print("[ERROR] Full traceback:", file=sys.stderr)
+        traceback.print_exc()
+        print("[ERROR] End of traceback", file=sys.stderr)
+        # Do not propagate exit code 1 to caller; keep terminal session alive with logs.
+        return
+    finally:
+        if predictor is not None:
+            try:
+                predictor.shutdown()
+            except Exception:
+                pass
 
 
 if __name__ == "__main__":

@@ -1,5 +1,21 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -uo pipefail
+
+report_error() {
+    local code="${1:-1}"
+    shift || true
+    local msg="${*:-unknown error}"
+    echo "[ERROR][${code}] ${msg}" >&2
+}
+
+run_or_report() {
+    "$@"
+    local code=$?
+    if [[ $code -ne 0 ]]; then
+        report_error "$code" "cmd failed: $*"
+    fi
+    return 0
+}
 
 # One-click custom video pipeline with compatibility fixes discovered in this session.
 # - Converts SMPLH 300-dim npz to CARI4D-compatible pkl (10-dim shapedirs + sparse regressors)
@@ -51,14 +67,14 @@ while [[ $# -gt 0 ]]; do
     --cx) CX="$2"; shift 2;;
     --cy) CY="$2"; shift 2;;
     -h|--help) usage; exit 0;;
-    *) echo "Unknown arg: $1"; usage; exit 1;;
+    *) echo "Unknown arg: $1"; usage; report_error 1 "Unknown arg: $1";;
   esac
 done
 
-[[ -f "$VIDEO" ]] || { echo "Missing video: $VIDEO"; exit 1; }
-[[ -d "$OPEN4DHOI_RUN" ]] || { echo "Missing open4dhoi run dir: $OPEN4DHOI_RUN"; exit 1; }
-[[ -f "$SMPLH_NPZ_DIR/SMPLH_MALE.npz" ]] || { echo "Missing $SMPLH_NPZ_DIR/SMPLH_MALE.npz"; exit 1; }
-[[ -f "$SMPLH_NPZ_DIR/SMPLH_FEMALE.npz" ]] || { echo "Missing $SMPLH_NPZ_DIR/SMPLH_FEMALE.npz"; exit 1; }
+[[ -f "$VIDEO" ]] || report_error 1 "Missing video: $VIDEO"
+[[ -d "$OPEN4DHOI_RUN" ]] || report_error 1 "Missing open4dhoi run dir: $OPEN4DHOI_RUN"
+[[ -f "$SMPLH_NPZ_DIR/SMPLH_MALE.npz" ]] || report_error 1 "Missing $SMPLH_NPZ_DIR/SMPLH_MALE.npz"
+[[ -f "$SMPLH_NPZ_DIR/SMPLH_FEMALE.npz" ]] || report_error 1 "Missing $SMPLH_NPZ_DIR/SMPLH_FEMALE.npz"
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
@@ -70,20 +86,20 @@ from PIL import Image
 PY
 then
     echo "[deps] Missing python packages detected, installing..."
-    python3 -m pip install --user numpy scipy h5py opencv-python joblib pillow
+    run_or_report python3 -m pip install --user numpy scipy h5py opencv-python joblib pillow
 fi
 
 echo "[1/6] Prepare video paths"
 VIDEO_DST="data/cari4d-demo/wild/videos/${SEQ}.0.color.mp4"
 mkdir -p "$(dirname "$VIDEO_DST")"
-cp -f "$VIDEO" "$VIDEO_DST"
+run_or_report cp -f "$VIDEO" "$VIDEO_DST"
 
 echo "[2/6] Convert SMPLH npz -> compatible pkl"
 mkdir -p data/smplh_src data/smpl/smplh data/smpl
-cp -f "$SMPLH_NPZ_DIR/SMPLH_MALE.npz" data/smplh_src/SMPLH_MALE.npz
-cp -f "$SMPLH_NPZ_DIR/SMPLH_FEMALE.npz" data/smplh_src/SMPLH_FEMALE.npz
+run_or_report cp -f "$SMPLH_NPZ_DIR/SMPLH_MALE.npz" data/smplh_src/SMPLH_MALE.npz
+run_or_report cp -f "$SMPLH_NPZ_DIR/SMPLH_FEMALE.npz" data/smplh_src/SMPLH_FEMALE.npz
 
-python3 - <<'PY'
+run_or_report python3 - <<'PY'
 import numpy as np, pickle, scipy.sparse as sp, shutil, os
 os.makedirs('data/smpl/smplh', exist_ok=True)
 
@@ -126,7 +142,7 @@ print('SMPLH compatibility files ready')
 PY
 
 echo "[3/6] Build CARI4D masks/packed/mesh from open4dhoi outputs"
-SEQ_ENV="$SEQ" OPEN4DHOI_ENV="$OPEN4DHOI_RUN" VIDEO_ENV="$VIDEO_DST" python3 - <<'PY'
+run_or_report env SEQ_ENV="$SEQ" OPEN4DHOI_ENV="$OPEN4DHOI_RUN" VIDEO_ENV="$VIDEO_DST" python3 - <<'PY'
 import os, json, cv2, h5py, joblib, numpy as np, re
 from pathlib import Path
 import shutil
@@ -216,7 +232,7 @@ print('Prepared masks/packed/mesh for', seq)
 PY
 
 echo "[4/6] Add minimal texture to metric mesh (PyTorch3D batch consistency)"
-SEQ_ENV="$SEQ" python3 - <<'PY'
+run_or_report env SEQ_ENV="$SEQ" python3 - <<'PY'
 from pathlib import Path
 import numpy as np
 from PIL import Image
@@ -267,9 +283,9 @@ PY
 
 echo "[5/6] Run robust Docker pipeline"
 mkdir -p data/cari4d-demo/wild/videos-aligned
-cp -f data/cari4d-demo/wild/videos/${SEQ}.0.color.mp4 data/cari4d-demo/wild/videos-aligned/${SEQ}.0.color.mp4
+run_or_report cp -f data/cari4d-demo/wild/videos/${SEQ}.0.color.mp4 data/cari4d-demo/wild/videos-aligned/${SEQ}.0.color.mp4
 
-FX_ENV="$FX" FY_ENV="$FY" CX_ENV="$CX" CY_ENV="$CY" PKL_PATH="data/cari4d-demo/wild/videos-aligned/${SEQ}.0.color.pkl" python3 - <<'PY'
+run_or_report env FX_ENV="$FX" FY_ENV="$FY" CX_ENV="$CX" CY_ENV="$CY" PKL_PATH="data/cari4d-demo/wild/videos-aligned/${SEQ}.0.color.pkl" python3 - <<'PY'
 import joblib, os
 joblib.dump(
     {'fx': float(os.environ['FX_ENV']), 'fy': float(os.environ['FY_ENV']), 'cx': float(os.environ['CX_ENV']), 'cy': float(os.environ['CY_ENV'])},
@@ -280,9 +296,11 @@ PY
 
 cat > "$ROOT/.tmp_stage5_inside.sh" <<'EOS'
 #!/usr/bin/env bash
-set -e
+set -uo pipefail
+report_error(){ c="${1:-1}"; shift || true; echo "[ERROR][${c}] ${*:-unknown error}" >&2; }
+run_or_report(){ "$@"; c=$?; [[ $c -eq 0 ]] || report_error "$c" "cmd failed: $*"; return 0; }
 
-python - <<'PY'
+run_or_report python - <<'PY'
 import importlib.util, subprocess, sys
 checks = [
     ("smplfitter", "smplfitter"),
@@ -301,28 +319,28 @@ else:
 PY
 
 # 5.1 Unidepth + NLF
-python prep/unidepth_behave.py --wild_video --video "$VIDEO_DST" -o data/cari4d-demo/wild/videos
-python prep/run_nlf_sepK.py -o data/cari4d-demo/videogen/nlf --masks_root data/cari4d-demo/videogen/masks --video "$VIDEO_DST" --wild_video
+run_or_report python prep/unidepth_behave.py --wild_video --video "$VIDEO_DST" -o data/cari4d-demo/wild/videos
+run_or_report python prep/run_nlf_sepK.py -o data/cari4d-demo/videogen/nlf --masks_root data/cari4d-demo/videogen/masks --video "$VIDEO_DST" --wild_video
 
 # 5.2 Fallback nlf-opt (skip fit_smplh_global compatibility pitfalls)
 mkdir -p data/cari4d-demo/videogen/nlf-opt
-cp -f data/cari4d-demo/videogen/nlf/"$SEQ"_params.pkl data/cari4d-demo/videogen/nlf-opt/"$SEQ"_params.pkl
+run_or_report cp -f data/cari4d-demo/videogen/nlf/"$SEQ"_params.pkl data/cari4d-demo/videogen/nlf-opt/"$SEQ"_params.pkl
 
 # 5.3 Prepare aligned folder sidecars used by later steps
-cp -f data/cari4d-demo/wild/videos/"$SEQ".0.color.mp4 data/cari4d-demo/wild/videos-aligned/"$SEQ".0.color.mp4
-cp -f data/cari4d-demo/wild/videos/"$SEQ".0.depth-reg.mp4 data/cari4d-demo/wild/videos-aligned/"$SEQ".0.depth-reg.mp4
+run_or_report cp -f data/cari4d-demo/wild/videos/"$SEQ".0.color.mp4 data/cari4d-demo/wild/videos-aligned/"$SEQ".0.color.mp4
+run_or_report cp -f data/cari4d-demo/wild/videos/"$SEQ".0.depth-reg.mp4 data/cari4d-demo/wild/videos-aligned/"$SEQ".0.depth-reg.mp4
 
 # 5.4 FP tracking
-python prep/fp_hy3d_track.py --viz_path x --wild_video --kid 0 --masks_root data/cari4d-demo/videogen/masks --hy3d_root=data/cari4d-demo/videogen/meshes-metric --video data/cari4d-demo/wild/videos-aligned/"$SEQ".0.color.mp4 -o data/cari4d-demo/videogen/fp-hy3d3-track
+run_or_report python prep/fp_hy3d_track.py --viz_path x --wild_video --kid 0 --masks_root data/cari4d-demo/videogen/masks --hy3d_root=data/cari4d-demo/videogen/meshes-metric --video data/cari4d-demo/wild/videos-aligned/"$SEQ".0.color.mp4 -o data/cari4d-demo/videogen/fp-hy3d3-track
 
 # 5.5 CoCoNet + optimization
-python run_horefine.py config=learning/configs/cari4d-release.yml split_file=splits/demo-behave.json use_sel_view=True render_video=True identifier=_demo use_intermediate=False data_name=test-only hy3d_meshes_root=data/cari4d-demo/videogen/meshes-metric masks_root=data/cari4d-demo/videogen/masks fp_root=data/cari4d-demo/videogen/fp-hy3d3-track nlf_root=data/cari4d-demo/videogen/nlf-opt video=data/cari4d-demo/wild/videos-aligned/"$SEQ".0.color.mp4 cam_id=0 wild_video=True outpath=output/coconet
-python learning/training/opt_refineout.py num_steps=3000 w_acc_v=600 w_contact=300 save_name=optv2 batch_size=16 opt_rot=True opt_trans=True w_temp=1000 w_sil=0.002 w_contact=200.0 w_pen=0.0 w_j2d=0.006 opt_smpl_trans=False opt_betas=False pth_file=output/coconet/cari4d-release+step031397_demo/"$SEQ".pth wild_video=True use_input=True video_root=data/cari4d-demo/wild/videos-aligned packed_root=data/cari4d-demo/videogen/packed masks_root=data/cari4d-demo/videogen/masks hy3d_meshes_root=data/cari4d-demo/videogen/meshes-metric outpath=output/opt
+run_or_report python run_horefine.py config=learning/configs/cari4d-release.yml split_file=splits/demo-behave.json use_sel_view=True render_video=True identifier=_demo use_intermediate=False data_name=test-only hy3d_meshes_root=data/cari4d-demo/videogen/meshes-metric masks_root=data/cari4d-demo/videogen/masks fp_root=data/cari4d-demo/videogen/fp-hy3d3-track nlf_root=data/cari4d-demo/videogen/nlf-opt video=data/cari4d-demo/wild/videos-aligned/"$SEQ".0.color.mp4 cam_id=0 wild_video=True outpath=output/coconet
+run_or_report python learning/training/opt_refineout.py num_steps=3000 w_acc_v=600 w_contact=300 save_name=optv2 batch_size=16 opt_rot=True opt_trans=True w_temp=1000 w_sil=0.002 w_contact=200.0 w_pen=0.0 w_j2d=0.006 opt_smpl_trans=False opt_betas=False pth_file=output/coconet/cari4d-release+step031397_demo/"$SEQ".pth wild_video=True use_input=True video_root=data/cari4d-demo/wild/videos-aligned packed_root=data/cari4d-demo/videogen/packed masks_root=data/cari4d-demo/videogen/masks hy3d_meshes_root=data/cari4d-demo/videogen/meshes-metric outpath=output/opt
 EOS
 
 chmod +x "$ROOT/.tmp_stage5_inside.sh"
 
-sg docker -c "docker run --rm --gpus all --network=host -e PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True -e SEQ=$SEQ -e VIDEO_DST=$VIDEO_DST -v $ROOT:/workspace -w /workspace xiexh20/cari4d:latest bash /workspace/.tmp_stage5_inside.sh"
+run_or_report sg docker -c "docker run --rm --gpus all --network=host -e PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True -e SEQ=$SEQ -e VIDEO_DST=$VIDEO_DST -v $ROOT:/workspace -w /workspace xiexh20/cari4d:latest bash /workspace/.tmp_stage5_inside.sh"
 
 echo "[6/6] Done"
 echo "Final output: output/opt/cari4d-release+step031397_demo-hy3d3-optv2/${SEQ}.pth"

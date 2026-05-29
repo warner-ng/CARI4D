@@ -104,7 +104,7 @@ def estimate_metric_scale(scorer, refiner, glctx, outdir, hy_file, color, depth,
             # load results and init the range from best K
             res = json.load(open(outfile))
             top3_scales = np.array(res['chamfs'])[:, 0][np.argsort(np.array(res['chamfs'])[:, 1])[:3]]
-            scale_candidates = np.linspace(np.min(top3_scales)*0.85, np.max(top3_scales)*1.15, 8)
+            scale_candidates = np.linspace(np.min(top3_scales)*0.8, np.max(top3_scales)*1.2, 8)
             # add top3 back
             scale_candidates = np.concatenate([scale_candidates, top3_scales])
             outfile = outfile.replace('_fp-res.json', '_fp-res-refine.json')

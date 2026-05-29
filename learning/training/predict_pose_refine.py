@@ -30,7 +30,7 @@ def make_crop_data_batch(render_size, ob_in_cams, mesh, rgb, depth, K, crop_rati
   B = len(ob_in_cams)
   poseA = torch.as_tensor(ob_in_cams, dtype=torch.float, device='cuda')
 
-  bs = 512
+  bs = 1
   rgb_rs = []
   depth_rs = []
   normal_rs = []
@@ -151,7 +151,7 @@ class PoseRefinePredictor:
       normal_map = None
 
     crop_ratio = self.cfg['crop_ratio']
-    bs = 1024
+    bs = 1
 
     B_in_cams = torch.as_tensor(ob_centered_in_cams, device='cuda', dtype=torch.float)
     if mesh_tensors is None:
