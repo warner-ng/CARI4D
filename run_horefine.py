@@ -27,6 +27,7 @@ from typing import Any
 import Utils
 from Utils import load_smpl_obj_uvmap
 from tools import img_utils
+
 from behave_data.utils import load_kinect_poses_back, init_video_controllers
 from lib_smpl import get_smpl
 from lib_smpl.body_landmark import BodyLandmarks

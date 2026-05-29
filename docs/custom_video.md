@@ -108,6 +108,12 @@ python prep/run_hy3d_recon.py \
     --masks_root data/cari4d-demo/wild/masks \
     --hy3d_root data/cari4d-demo/meshes \
     --blender_path /path/to/blender
+
+python prep/run_hy3d_recon.py \
+  --video data/carry_bike/videos/carry_bike.0.color.mp4 \
+  --masks_root data/carry_bike/masks \
+  --hy3d_root data/carry_bike/meshes \
+  --blender_path blender
 ```
 
 **Notes:**

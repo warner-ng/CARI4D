@@ -2,6 +2,9 @@
 
 This is the shortest command flow we validated in this session.
 
+For full troubleshooting history and all compatibility fixes used in the successful run, see:
+`docs/custom_video_full_runbook_20260529.md`.
+
 ## 1) Make script executable
 
 ```bash

@@ -98,12 +98,12 @@ class Monodepth2HumanAligner(MonodepthAligner):
             smpl_verts_k = np.matmul(gt_smpl_verts, w2c[:3, :3].T) + w2c[:3, 3]
             dists_min = np.zeros(len(smpl_verts_k)) - 1  # dummy data
 
-            chunk_size = 640 if args.data_source == 'hodome' else 32
+            chunk_size = 640 if args.data_source == 'hodome' else 196
             for i in tqdm(range(0, video_length, chunk_size)):
                 smpl_verts_k_chunk = torch.from_numpy(smpl_verts_k[i:i + chunk_size]).to(device).float()
                 verts_comb = smpl_verts_k_chunk
                 K_rois_chunk = [K_all[kid]] * len(smpl_verts_k_chunk)
-                depth_only = True
+                depth_only = i > 50
 
                 ret = Utils.nvdiff_color_depth_render(K_rois_chunk, self.glctx, mesh_tensors, render_size, verts_comb,
                                                       depth_only=depth_only)
