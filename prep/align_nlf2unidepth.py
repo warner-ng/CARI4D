@@ -22,10 +22,20 @@ import Utils
 import joblib
 import h5py
 import torch
+import torch.nn as nn
 from behave_data.behave_video import BaseBehaveVideoData, load_masks
 from lib_smpl import get_smpl, SMPL_MODEL_ROOT
 from tools import icp_utils
 import open3d as o3d 
+
+# Compat for smplfitter on torch versions where nn.Buffer is not exposed.
+if not hasattr(nn, 'Buffer'):
+    try:
+        from torch.nn.parameter import Buffer as _TorchBuffer
+        nn.Buffer = _TorchBuffer
+    except Exception:
+        nn.Buffer = lambda x: nn.Parameter(x, requires_grad=False)
+
 from smplfitter.pt import BodyModel, BodyFitter
 import time
 

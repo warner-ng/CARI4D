@@ -33,7 +33,17 @@ if not hasattr(inspect, "getargspec"):
 
 import smplx
 import torch
+import torch.nn as nn
 import trimesh
+
+# Compat for smplfitter on torch versions where nn.Buffer is not exposed.
+if not hasattr(nn, 'Buffer'):
+    try:
+        from torch.nn.parameter import Buffer as _TorchBuffer
+        nn.Buffer = _TorchBuffer
+    except Exception:
+        nn.Buffer = lambda x: nn.Parameter(x, requires_grad=False)
+
 from smplfitter.pt import BodyModel as SmplfitBodyModel, BodyFitter as SmplfitBodyFitter
 from tqdm import tqdm
 

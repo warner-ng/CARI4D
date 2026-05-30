@@ -25,12 +25,21 @@ sys.path.insert(0, os.getcwd())
 import h5py
 import cv2
 import torch
+import torch.nn as nn
 import numpy as np
 from glob import glob
 from tqdm import tqdm
 from torch.utils.data import default_collate
 import os.path as osp
 import joblib
+
+# Compat for smplfitter on torch versions where nn.Buffer is not exposed.
+if not hasattr(nn, 'Buffer'):
+    try:
+        from torch.nn.parameter import Buffer as _TorchBuffer
+        nn.Buffer = _TorchBuffer
+    except Exception:
+        nn.Buffer = lambda x: nn.Parameter(x, requires_grad=False)
 
 from behave_data.behave_video import BaseBehaveVideoData
 from behave_data.const import _sub_gender, EXCLUDE_OBJECTS

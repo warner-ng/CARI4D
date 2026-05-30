@@ -14,9 +14,19 @@ sys.path.append(os.getcwd())
 import cv2
 import torch
 import torchvision  # <--- This registers the 'nms' operator, required for loading NLF model.
+import torch.nn as nn
 from glob import glob
 from tqdm import tqdm
 import numpy as np
+
+# Compat for smplfitter on torch versions where nn.Buffer is not exposed.
+if not hasattr(nn, 'Buffer'):
+    try:
+        from torch.nn.parameter import Buffer as _TorchBuffer
+        nn.Buffer = _TorchBuffer
+    except Exception:
+        nn.Buffer = lambda x: nn.Parameter(x, requires_grad=False)
+
 from smplfitter.pt import BodyModel, BodyFitter
 import os.path as osp
 import joblib
