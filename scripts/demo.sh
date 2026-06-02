@@ -32,7 +32,7 @@ video_prefix=$(basename "$video" | cut -d. -f1)
 echo $video_prefix
 # For 16GB GPUs, use a lower batch size by default to avoid CUDA OOM at penetration loss stage.
 # Override when needed, e.g. OPT_REFINE_BS=96 OPT_REFINE_PEN=2.0 bash scripts/demo.sh
-OPT_REFINE_BS=${OPT_REFINE_BS:-32}
+OPT_REFINE_BS=${OPT_REFINE_BS:-64}
 OPT_REFINE_PEN=${OPT_REFINE_PEN:-2.0}
 export PYTORCH_CUDA_ALLOC_CONF=${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}
 python learning/training/opt_refineout.py num_steps=3000 w_acc_v=600 w_contact=300  save_name=optv2 batch_size=${OPT_REFINE_BS} opt_rot=True \

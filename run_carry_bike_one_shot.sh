@@ -1,4 +1,5 @@
-#!/usr/bin/env bash
+#!/usr/bin/env bash 首先，不要启动docker,不要启动docker,不要启动docker,重要的事情说三遍
+# 这一步大概用时 3min 
 set -o pipefail
 report_error(){ c="${1:-ERR}"; shift || true; echo "[ERROR][$c] ${*:-unknown error}"; }
 run_or_report(){ "$@"; c=$?; [[ $c -eq 0 ]] || report_error "$c" "cmd failed: $*"; return 0; }
@@ -8,10 +9,10 @@ HUMAN_PROMPT="man"
 OBJECT_PROMPT="bike"
 
 
-SEQ_RAW="bike_on_may_29_21_17"
-SEQ="Date03_Sub01_bike_on_may_29_21_17"
-VIDEO_IN="/home/warner/_projects/CARI4D/bike_on_may_29_21_17.mov"
-MASKS_IN="data/bike_on_may_29_21_17/masks/bike_on_may_29_21_17_masks_k0.h5"
+SEQ_RAW="bike_May_31_19_34"
+SEQ="Date03_Sub01_bike_May_31_19_34"
+VIDEO_IN="/home/warner/_projects/CARI4D/bike_May_31_19_34.mov"
+MASKS_IN="data/bike_May_31_19_34/masks/bike_May_31_19_34_masks_k0.h5"
 BLENDER_PATH="/home/warner/tools/blender-3.6.17-linux-x64/blender"
 
 DATA_SEQ_ROOT="data/${SEQ_RAW}"
@@ -56,9 +57,11 @@ run_or_report python prep/run_sam3_masks.py \
 run_or_report test -f "$MASKS_IN"
 
 rm -f "$VIDEO_OUT"
-ffmpeg -y -i "$VIDEO_IN" -frames:v 240 -pix_fmt yuv420p "$VIDEO_OUT"
+# Export full input video (preserve duration and framerate)
+ffmpeg -y -i "$VIDEO_IN" -pix_fmt yuv420p "$VIDEO_OUT"
 
-
+# Fix masks symlink before creating group aliases
+ln -sfn "$(realpath "$(dirname "$MASKS_IN")")" "${VIDEOGEN_ROOT}/masks"
 
 src_m="$(realpath "$MASKS_IN")"
 ln -sfn "$src_m" "$MASKS_OUT"
@@ -110,6 +113,8 @@ export LD_LIBRARY_PATH="$CONDA_PREFIX/lib:$TORCH_LIB:${LD_LIBRARY_PATH:-}"
 
 python -c "import custom_rasterizer, custom_rasterizer_kernel; print('rasterizer ok')"
 
+
+# 这个步骤会花掉15min
 python prep/run_hy3d_recon.py \
   --video "$VIDEO_IN" \
   --masks_root "$(dirname "$MASKS_IN")" \
@@ -118,6 +123,11 @@ python prep/run_hy3d_recon.py \
 
 src_mesh="$(realpath "data/${SEQ_RAW}/meshes")"
 ln -sfn "$src_mesh" "${VIDEOGEN_ROOT}/meshes"
+
+# Create a symlink with the full sequence name to avoid IndexError in scale estimation
+cd "${VIDEOGEN_ROOT}/meshes"
+ln -sfn "${SEQ_RAW}_000_rgba" "${SEQ}_000_rgba"
+cd -
 
 OUT="${VIDEOGEN_ROOT}/meshes/${SEQ}_000_rgba"
 SRC_GLB="data/${SEQ_RAW}/meshes/${SEQ_RAW}_000_rgba/${SEQ_RAW}_000_rgba.glb"
@@ -130,9 +140,12 @@ import bpy
 bpy.ops.object.select_all(action='SELECT')
 bpy.ops.object.delete()
 bpy.ops.import_scene.gltf(filepath='$SRC_GLB')
-bpy.ops.wm.obj_export(filepath='$OUT/${SEQ}_000_align.obj', export_materials=True)
+# 注意：这里输出文件名必须包含 ${SEQ} 全名，且建议以 _rgba.obj 结尾以满足代码注释
+bpy.ops.wm.obj_export(filepath='$OUT/${SEQ}_000_rgba.obj', export_materials=True)
 "
 
+# 额外保险：确保文件名绝对匹配 glob
+ln -sfn "${SEQ}_000_rgba.obj" "$OUT/${SEQ}_000_align.obj"
 
 
 
@@ -140,6 +153,7 @@ bpy.ops.wm.obj_export(filepath='$OUT/${SEQ}_000_align.obj', export_materials=Tru
 
 
 
+# 这个步骤大概要 7 min
 cd /home/warner/_projects/CARI4D
 source /home/warner/miniconda3/etc/profile.d/conda.sh
 conda activate cari4d
@@ -161,6 +175,7 @@ run_or_report conda run -n cari4d python prep/run_sapiens_pose.py \
 
 
 # 新终端单独重跑 Step4 前，先执行这段（宏变量+环境）
+# 32个batch_size用时
 
 # 千万千万不要运行 bash docker/run_container.sh
 docker start cari4d
@@ -176,8 +191,8 @@ set -o pipefail
 report_error(){ c="${1:-ERR}"; shift || true; echo "[ERROR][$c] ${*:-unknown error}"; }
 run_or_report(){ "$@"; c=$?; [[ $c -eq 0 ]] || report_error "$c" "cmd failed: $*"; return 0; }
 
-SEQ_RAW="bike_on_may_29_21_17"
-SEQ="Date03_Sub01_bike_on_may_29_21_17"
+SEQ_RAW="bike_May_31_19_34"
+SEQ="Date03_Sub01_bike_May_31_19_34"
 VIDEOGEN_ROOT="data/cari4d-demo/videogen"
 VIDEO_OUT="${VIDEOGEN_ROOT}/videos/${SEQ}.0.color.mp4"
 
@@ -217,4 +232,10 @@ print("texture patched:", obj)
 PY
 
 export PYTHONPATH=/tmp:${PYTHONPATH:-}
+env -u PIPELINE_PROFILE -u COCONET_USE_INTERMEDIATE -u OPT_REFINE_BS -u OPT_REFINE_PEN -u OPT_W_J2D -u PYTORCH_CUDA_ALLOC_CONF \
+COCONET_USE_INTERMEDIATE=False \
+OPT_REFINE_BS=32 \
+OPT_REFINE_PEN=2.0 \
+OPT_W_J2D=0.006 \
+PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:128 \
 bash scripts/demo-custom.sh "${VIDEO_OUT}"

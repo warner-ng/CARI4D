@@ -439,10 +439,8 @@ class RefineOutOptimizer(BaseBehaveVideoData):
                     loss_pen = smplh_model.volume.collision_loss(obj_pts_posed, smplh_output)[0].mean() * self.cfg.w_pen
                 except RuntimeError as e:
                     if _is_cuda_oom(e):
-                        print(f'[OOM guard] CUDA OOM during penetration loss at step {step}; disable w_pen and continue.')
-                        self.cfg.w_pen = 0.0
-                        torch.cuda.empty_cache()
-                        loss_pen = torch.tensor(0.0, device=self.device)
+                        print(f'[OOM guard] CUDA OOM during penetration loss at step {step}; keeping w_pen and retrying with smaller batch if possible.')
+                        raise
                     else:
                         raise
             t4 = time.time()    
@@ -496,14 +494,8 @@ class RefineOutOptimizer(BaseBehaveVideoData):
                     optimizer.zero_grad(set_to_none=True)
                     torch.cuda.empty_cache()
 
-                    if self.cfg.w_pen > 0:
-                        # first fallback: disable penetration loss, it is the most memory-intensive part.
-                        print(f'[OOM guard] CUDA OOM at step {step}; disable w_pen and retry this step.')
-                        self.cfg.w_pen = 0.0
-                        continue
-
                     if batch_size > 8:
-                        # second fallback: reduce batch size and rebuild SMPLH model for new batch.
+                        # fallback: reduce batch size and rebuild SMPLH model for new batch.
                         new_batch = max(8, batch_size // 2)
                         if new_batch < batch_size:
                             print(f'[OOM guard] CUDA OOM at step {step}; reducing batch size {batch_size} -> {new_batch} and retrying.')

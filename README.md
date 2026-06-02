@@ -40,6 +40,10 @@ ls -l /var/run/docker.sock # should be able to see docker in the list
 docker pull xiexh20/cari4d && docker tag xiexh20/cari4d cari4d  
 # Or to build from scratch: cd docker/ && docker build --network host -t cari4d . && cd .. 
 bash docker/run_container.sh
+
+
+docker start cari4d
+docker exec -it cari4d bash
 ```
 
 **Environment setup option 2**: conda (experimental)
