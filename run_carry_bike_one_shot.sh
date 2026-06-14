@@ -5,15 +5,15 @@ report_error(){ c="${1:-ERR}"; shift || true; echo "[ERROR][$c] ${*:-unknown err
 run_or_report(){ "$@"; c=$?; [[ $c -eq 0 ]] || report_error "$c" "cmd failed: $*"; return 0; }
 cd /home/warner/_projects/CARI4D
 
-HUMAN_PROMPT="man"
-OBJECT_PROMPT="bike"
+HUMAN_PROMPT="person"  # CHANGE_ME: 每次换新视频时，按视频里的人改 prompt
+OBJECT_PROMPT="bike"  # CHANGE_ME: 每次换新视频时，按交互物体改 prompt
 
 
-SEQ_RAW="bike_May_31_19_34"
-SEQ="Date03_Sub01_bike_May_31_19_34"
-VIDEO_IN="/home/warner/_projects/CARI4D/bike_May_31_19_34.mov"
-MASKS_IN="data/bike_May_31_19_34/masks/bike_May_31_19_34_masks_k0.h5"
-BLENDER_PATH="/home/warner/tools/blender-3.6.17-linux-x64/blender"
+SEQ_RAW="sister_bike"  # CHANGE_ME: 每次换新视频时，改成短名字
+SEQ="Date03_Sub01_sister_bike"  # CHANGE_ME: 每次换新视频时，改成完整序列名
+VIDEO_IN="/home/warner/_projects/CARI4D/sister_bike.mov"  # CHANGE_ME: 每次换新视频时，改成源视频路径
+MASKS_IN="data/${SEQ_RAW}/masks/${SEQ}_masks_k0.h5"
+BLENDER_PATH="/home/warner/tools/blender-3.6.17-linux-x64/blender"  # CHANGE_ME: 只有 Blender 路径变了才改
 
 DATA_SEQ_ROOT="data/${SEQ_RAW}"
 MASKS_ROOT="${DATA_SEQ_ROOT}/masks"
@@ -114,7 +114,7 @@ export LD_LIBRARY_PATH="$CONDA_PREFIX/lib:$TORCH_LIB:${LD_LIBRARY_PATH:-}"
 python -c "import custom_rasterizer, custom_rasterizer_kernel; print('rasterizer ok')"
 
 
-# 这个步骤会花掉15min
+# 这个步骤会花掉7min
 python prep/run_hy3d_recon.py \
   --video "$VIDEO_IN" \
   --masks_root "$(dirname "$MASKS_IN")" \
@@ -191,8 +191,8 @@ set -o pipefail
 report_error(){ c="${1:-ERR}"; shift || true; echo "[ERROR][$c] ${*:-unknown error}"; }
 run_or_report(){ "$@"; c=$?; [[ $c -eq 0 ]] || report_error "$c" "cmd failed: $*"; return 0; }
 
-SEQ_RAW="bike_May_31_19_34"
-SEQ="Date03_Sub01_bike_May_31_19_34"
+SEQ_RAW="sister_bike"
+SEQ="Date03_Sub01_sister_bike"
 VIDEOGEN_ROOT="data/cari4d-demo/videogen"
 VIDEO_OUT="${VIDEOGEN_ROOT}/videos/${SEQ}.0.color.mp4"
 

@@ -76,11 +76,14 @@ def get_test_view_id(video_prefix):
 def get_hy3d_mesh_file(video_prefix, meshes_root='/home/xianghuix/datasets/behave/selected-views/hy3d-aligned-center'):
     obj_name = video_prefix.split('_')[2]
     files = sorted(glob.glob(f'{meshes_root}/{video_prefix}*/*{obj_name}*_align.obj'))
+    files = [x for x in files if '.bad' not in x and '/backup' not in x]
     if len(files) == 0:
         print(f'no aligned hy3d template found for {video_prefix}')
         return None
-    print('using HY3D mesh:', files[0])
-    return files[0]
+    preferred = f'{meshes_root}/{video_prefix}_000_align/{video_prefix}_000_align.obj'
+    mesh_file = preferred if preferred in files else files[0]
+    print('using HY3D mesh:', mesh_file)
+    return mesh_file
 
 EXCLUDE_OBJECTS = ['boxtiny', 'boxsmall', 'basketball', 'keyboard', 'toolbox', 'yogaball'] # some behave objects that are exlcuded
 BEHAVE_ROOT = '/home/xianghuix/datasets/behave'

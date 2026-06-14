@@ -18,6 +18,7 @@ import torch
 import cv2
 import imageio
 import time
+import trimesh
 from tqdm import tqdm
 import nvdiffrast.torch as dr
 from pytorch3d.renderer import look_at_view_transform
@@ -31,7 +32,7 @@ from tools import img_utils
 from behave_data.utils import load_kinect_poses_back, init_video_controllers
 from lib_smpl import get_smpl
 from lib_smpl.body_landmark import BodyLandmarks
-from behave_data.const import _sub_gender
+from behave_data.const import _sub_gender, get_hy3d_mesh_file
 from behave_data.behave_video import load_masks
 from prep.render_fp_nlf import BehaveFPNLFRenderer
 from tools.eval_base import ModelEvaluator
@@ -101,18 +102,8 @@ class HORefineRunner(BehaveFPNLFRenderer):
         # object-only tensors for mask computation/render (no texture path to avoid None textures)
         obj_idx = 1
         verts_obj_base_t = meshes_any[obj_idx].verts_padded()[0].to(device).float()
-        tex = meshes[obj_idx].textures
-        uv = tex.verts_uvs_padded()[0]
-        uv[:, 1] = 1 - uv[:, 1]
-        mesh_tensors_obj = {
-            "tex": tex.maps_padded().to(device).float(),  # this must be (1, H, W, 3)
-            'uv_idx': torch.tensor(tex.faces_uvs_padded()[0], device=device, dtype=torch.int),
-            # correct way to get face uvs
-            'uv': uv.to(device).float(),
-            'pos': meshes[obj_idx].verts_padded()[0].to(device).float(),
-            'faces': torch.tensor(meshes[obj_idx].faces_padded()[0], device=device, dtype=torch.int),
-            'vnormals': meshes[obj_idx].verts_normals_padded()[0].to(device).float(),
-        }
+        hy3d_file = get_hy3d_mesh_file(seq_name, meshes_root=cfg.hy3d_meshes_root)
+        mesh_tensors_obj = Utils.make_mesh_tensors(trimesh.load(hy3d_file, process=False, force='mesh'), device=device)
         # step 3: load one batch of images and human object masks and compute ROI/Kroi
         t0 = time.time()
         controllers, tar_mask = self.prepare_video_mask_loader(args, kids, video_prefix, cfg)
@@ -670,4 +661,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-

@@ -118,6 +118,22 @@ def load_smpl_obj_uvmap(video_prefix, use_hy3d=False, seq_name=None, human_textu
     files = files[:1]
   
   print('loading templates from', files)
+  if use_hy3d and not hum_only:
+    obj_mesh = trimesh.load(file_hy3d, process=False, force='mesh')
+    has_obj_texture = isinstance(obj_mesh.visual, trimesh.visual.texture.TextureVisuals) and obj_mesh.visual.material.image is not None
+    if not has_obj_texture:
+      hum_mesh = trimesh.load(files[0], process=False, force='mesh')
+      meshes = [load_objs_as_meshes([files[0]], device='cuda'), load_objs_as_meshes([file_hy3d], device='cuda')]
+      hum_colors = np.tile(np.array([160, 160, 160]).reshape(1, 3), (len(hum_mesh.vertices), 1))
+      obj_colors = np.tile(np.array([128, 128, 128]).reshape(1, 3), (len(obj_mesh.vertices), 1))
+      mesh_tensors = {
+        'vertex_color': torch.as_tensor(np.concatenate([hum_colors, obj_colors], 0), device='cuda', dtype=torch.float) / 255.0,
+        'pos': torch.tensor(np.concatenate([hum_mesh.vertices, obj_mesh.vertices], 0), device='cuda', dtype=torch.float),
+        'faces': torch.tensor(np.concatenate([hum_mesh.faces, obj_mesh.faces + len(hum_mesh.vertices)], 0), device='cuda', dtype=torch.int),
+        'vnormals': torch.tensor(np.concatenate([hum_mesh.vertex_normals, obj_mesh.vertex_normals], 0), device='cuda', dtype=torch.float),
+      }
+      return mesh_tensors, meshes
+
   meshes = load_objs_as_meshes(files, device='cuda')
 
   scene = join_meshes_as_scene(meshes)

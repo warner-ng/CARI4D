@@ -26,6 +26,24 @@ import Utils
 from tools.chamfer_dist_np import chamfer_distance
 
 
+def mesh_file_exists(mesh_path):
+    if not osp.isfile(mesh_path):
+        return False
+    with open(mesh_path, 'r') as f:
+        first_char = f.read(1)
+    return first_char != '{'
+
+
+def get_scale_output_names(hy_file):
+    name = osp.splitext(osp.basename(hy_file))[0]
+    result_name = name
+    if result_name.endswith('_rgba'):
+        result_name = result_name[:-5]
+    if result_name.endswith('_align'):
+        result_name = result_name[:-6]
+    return name, result_name
+
+
 def get_specific_frame(video_prefix, frame_time, kid=1):
     from behave_data.video_reader import ColorDepthController
     ctrl = ColorDepthController(video_prefix, kid)
@@ -70,13 +88,13 @@ def estimate_metric_scale(scorer, refiner, glctx, outdir, hy_file, color, depth,
     
     """
     fname = osp.basename(hy_file)
+    name, result_name = get_scale_output_names(hy_file)
 
     # save color and depth to output dir
-    name = osp.splitext(osp.basename(hy_file))[0]
     outdir_i = f'{outdir}/{name}'
     os.makedirs(outdir_i, exist_ok=True)
-    mesh_out = osp.join(outdir_i, osp.basename(hy_file).replace('_rgba.obj', '_align.obj'))
-    if osp.isfile(mesh_out):
+    mesh_out = osp.join(outdir_i, f'{result_name}_align.obj')
+    if mesh_file_exists(mesh_out):
         print(mesh_out, 'already exists, exiting...')
         return
     cv2.imwrite(f'{outdir_i}/rgb.png', color[:, :, ::-1])
@@ -96,10 +114,10 @@ def estimate_metric_scale(scorer, refiner, glctx, outdir, hy_file, color, depth,
     # dilate the mask
     obj_pts = xyz_map[mask_o > 127].reshape((-1, 3))
     obj_colors = color[mask_o > 127].reshape((-1, 3))
-    trimesh.PointCloud(obj_pts, obj_colors / 255.).export(f'{debug_dir}/{fname.replace("_rgba.obj", f"_obj_pts.ply")}')
+    trimesh.PointCloud(obj_pts, obj_colors / 255.).export(f'{debug_dir}/{result_name}_obj_pts.ply')
 
     for i in range(3): # coarse to fine and then save, in total 3 iterations.
-        outfile = f'{outdir_i}/{fname.replace("_rgba.obj", "_fp-res.json")}'
+        outfile = f'{outdir_i}/{result_name}_fp-res.json'
         if osp.isfile(outfile):
             # load results and init the range from best K
             res = json.load(open(outfile))
@@ -115,17 +133,22 @@ def estimate_metric_scale(scorer, refiner, glctx, outdir, hy_file, color, depth,
 
                 os.makedirs(osp.dirname(mesh_out), exist_ok=True)
                 assert mesh_out != hy_file
-                # use pytorch3d to load and save
+                # use pytorch3d to preserve UV texture when present; otherwise save geometry only
                 torch.set_default_tensor_type('torch.FloatTensor') # avoid loading error
                 mesh_hy_orig: Meshes = load_objs_as_meshes([hy_file], device='cpu')[0]
                 tex: TexturesUV = mesh_hy_orig.textures
-                save_obj(mesh_out, mesh_hy_orig.verts_packed()*best_scale,
-                        mesh_hy_orig.faces_packed(),
-                        normals=mesh_hy_orig.verts_normals_packed(),
-                        faces_normals_idx=mesh_hy_orig.faces_normals_packed(),
-                        verts_uvs=tex.verts_uvs_padded()[0],
-                        faces_uvs=tex.faces_uvs_padded()[0],
-                        texture_map=tex.maps_padded()[0])
+                if tex is not None:
+                    save_obj(mesh_out, mesh_hy_orig.verts_packed()*best_scale,
+                            mesh_hy_orig.faces_packed(),
+                            normals=mesh_hy_orig.verts_normals_packed(),
+                            faces_normals_idx=mesh_hy_orig.faces_normals_packed(),
+                            verts_uvs=tex.verts_uvs_padded()[0],
+                            faces_uvs=tex.faces_uvs_padded()[0],
+                            texture_map=tex.maps_padded()[0])
+                else:
+                    mesh_no_tex = trimesh.load_mesh(hy_file, process=False, force='mesh')
+                    mesh_no_tex.vertices = mesh_no_tex.vertices * best_scale
+                    mesh_no_tex.export(mesh_out)
                 print(mesh_out, 'saved with scale', best_scale)
                 break
         else:
@@ -179,7 +202,7 @@ def estimate_metric_scale(scorer, refiner, glctx, outdir, hy_file, color, depth,
         pose_best = pose_results[best_idx]
         mesh_best.vertices = np.matmul(mesh_best.vertices, pose_best[:3, :3].T) + pose_best[:3, 3]
         # get fname of this hy3d file
-        trimesh.PointCloud(mesh_best.vertices).export(f'{outdir}/{fname.replace("_rgba.obj", f"_best_{best_scale:.3f}_obj.ply")}')
+        trimesh.PointCloud(mesh_best.vertices).export(f'{outdir}/{result_name}_best_{best_scale:.3f}_obj.ply')
         # save scales and chamf scores as json file
         # pick the top 2 scales with lowest chamfer distance
         top2_scales = scale_candidates[np.argsort(chamfs)[:2]]
@@ -207,5 +230,4 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     fp_scale_estimator(args)
-
 
