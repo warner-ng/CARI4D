@@ -170,7 +170,7 @@ docker exec \
   -e SKIP_EXISTING="$SKIP_EXISTING" \
   -e PIPELINE_PROFILE=behave_like_demo \
   -e COCONET_USE_INTERMEDIATE=False \
-  -e OPT_REFINE_BS=32 \
+  -e OPT_REFINE_BS=16 \
   -e OPT_REFINE_PEN=2.0 \
   -e OPT_W_J2D=0.006 \
   -e PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:128 \
@@ -215,9 +215,14 @@ Image.new("RGB",(4,4),(200,200,200)).save(png)
 print("texture patched:", obj)
 PY
 
-if [[ "$SKIP_EXISTING" == "1" ]] && find output/opt -path "*${SEQ}.pth" -print -quit 2>/dev/null | grep -q .; then
-  echo "skip docker demo-custom: final opt result already exists for ${SEQ}"
+if [[ "$SKIP_EXISTING" == "1" ]] && find output/opt -path "*${SEQ}+step003000.mp4" -print -quit 2>/dev/null | grep -q .; then
+  echo "skip docker demo-custom: final opt video already exists for ${SEQ}"
 else
+  existing_opt="$(find output/opt -mindepth 2 -maxdepth 2 -type f -name "${SEQ}.pth" -printf "%T@ %h\n" 2>/dev/null | sort -n | tail -1 | cut -d" " -f2-)"
+  if [[ -n "${existing_opt:-}" ]]; then
+    export EXP_TS="$(basename "$existing_opt" | sed -E "s/.*_demo_([0-9]{8}-[0-9]{6})-hy3d3-.*/\1/")"
+    echo "resume docker demo-custom with EXP_TS=${EXP_TS}"
+  fi
   bash scripts/demo-custom.sh "$VIDEO_OUT"
 fi
 '
